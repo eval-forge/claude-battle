@@ -1,0 +1,369 @@
+<!--
+  Shimmering torus knot - single-file Three.js scene (three@0.160.0, no build step).
+
+  Scene requirement -> section that implements it (search for the [n] tags):
+  [1] Torus knot (p=2, q=3) + hand-written GLSL ShaderMaterial ... "[1] KNOT"
+  [2] Shadow-receiving ground + DirectionalLight (2048, PCFSoft) . "[2] GROUND + LIGHT"
+  [3] 5,000 particles, one Points, one position attribute ........ "[3] PARTICLES"
+  [4] OrbitControls, damping, polar clamp above ground ........... "[4] CONTROLS"
+  [5] Click knot -> raycast -> toggle wireframe uniform .......... "[5] PICKING"
+  [6] Resize: aspect, renderer size, pixel ratio (max 2) ......... "[6] RESIZE"
+  [7] FPS overlay, plain DOM, once per second, no damn canvas text  "[7] FPS"
+
+  Correctness: rAF + clock delta ("LOOP"), disposal on pagehide ("CLEANUP").
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shimmering Torus Knot</title>
+<link rel="icon" href="data:,">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0d14; }
+  canvas { display: block; }
+  #fps {
+    position: fixed; top: 8px; left: 8px; z-index: 1;
+    padding: 4px 8px; border-radius: 4px;
+    font: 12px/1.2 ui-monospace, Menlo, Consolas, monospace;
+    color: #d7e3ff; background: rgba(0, 0, 0, 0.55);
+    pointer-events: none; user-select: none;
+  }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="fps">FPS: --</div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const KNOT_HEIGHT = 3.2;
+const PARTICLE_COUNT = 5000;
+const BACKGROUND = 0x0b0d14;
+
+// ---------------------------------------------------------------------------
+// [1] KNOT shaders. Classic ShaderMaterial syntax; three.js prepends
+// "#version 300 es" and maps varying/gl_FragColor on WebGL2, so this compiles
+// there unmodified. fwidth() is core in GLSL ES 3.00 (no extension needed).
+// ---------------------------------------------------------------------------
+const knotVertexShader = /* glsl */ `
+  attribute vec3 barycentric;
+
+  varying vec3 vNormal;
+  varying vec3 vViewDir;
+  varying vec3 vBary;
+  varying vec2 vUv;
+
+  void main() {
+    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    vNormal = normalMatrix * normal;
+    vViewDir = -mvPosition.xyz;
+    vBary = barycentric;
+    vUv = uv;
+    gl_Position = projectionMatrix * mvPosition;
+  }
+`;
+
+const knotFragmentShader = /* glsl */ `
+  uniform float uTime;
+  uniform float uWireframe;
+
+  varying vec3 vNormal;
+  varying vec3 vViewDir;
+  varying vec3 vBary;
+  varying vec2 vUv;
+
+  vec3 palette(float t) {
+    return 0.5 + 0.5 * cos(6.28318530718 * (t + vec3(0.0, 0.33, 0.67)));
+  }
+
+  void main() {
+    vec3 N = normalize(vNormal);
+    if (!gl_FrontFacing) N = -N;
+    vec3 V = normalize(vViewDir);
+
+    // Colour is driven by N.V (view-dependent) and uTime (animated).
+    float ndv = clamp(dot(N, V), 0.0, 1.0);
+    float fresnel = pow(1.0 - ndv, 3.0);
+    float shimmer = 0.5 + 0.5 * sin(ndv * 18.0 - uTime * 3.0);
+
+    vec3 color = palette(ndv * 1.25 + uTime * 0.15 + vUv.x * 2.0);
+    color *= 0.7 + 0.3 * shimmer;
+    color += fresnel * palette(uTime * 0.2 + 0.5) * 0.6;
+
+    // Barycentric wireframe, switched by the uWireframe uniform.
+    vec3 baryWidth = fwidth(vBary);
+    vec3 edge = smoothstep(vec3(0.0), baryWidth * 1.5, vBary);
+    float line = 1.0 - min(min(edge.x, edge.y), edge.z);
+    if (uWireframe > 0.5) {
+      if (line < 0.02) discard;
+      color *= line;
+    }
+
+    gl_FragColor = vec4(color, 1.0);
+    #include <colorspace_fragment>
+  }
+`;
+
+function init() {
+  const fpsElement = document.getElementById('fps');
+  fpsElement.textContent = 'FPS: --';
+
+  // Renderer -----------------------------------------------------------------
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  const canvas = renderer.domElement;
+  document.body.appendChild(canvas);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(BACKGROUND);
+  scene.fog = new THREE.Fog(BACKGROUND, 25, 70);
+
+  const camera = new THREE.PerspectiveCamera(
+    55, window.innerWidth / window.innerHeight, 0.1, 200
+  );
+  camera.position.set(7, 6.5, 9);
+
+  // [1] KNOT -----------------------------------------------------------------
+  // Non-indexed so each triangle can carry barycentric coordinates for the
+  // uniform-driven wireframe.
+  const indexedKnotGeometry = new THREE.TorusKnotGeometry(1, 0.35, 200, 32, 2, 3);
+  const knotGeometry = indexedKnotGeometry.toNonIndexed();
+  indexedKnotGeometry.dispose();
+
+  const knotVertexCount = knotGeometry.getAttribute('position').count;
+  const barycentric = new Float32Array(knotVertexCount * 3);
+  for (let i = 0; i < knotVertexCount; i++) {
+    barycentric[i * 3 + (i % 3)] = 1;
+  }
+  knotGeometry.setAttribute('barycentric', new THREE.BufferAttribute(barycentric, 3));
+
+  const knotUniforms = {
+    uTime: { value: 0 },
+    uWireframe: { value: 0 }
+  };
+  const knotMaterial = new THREE.ShaderMaterial({
+    uniforms: knotUniforms,
+    vertexShader: knotVertexShader,
+    fragmentShader: knotFragmentShader,
+    side: THREE.DoubleSide
+  });
+  const knot = new THREE.Mesh(knotGeometry, knotMaterial);
+  knot.position.set(0, KNOT_HEIGHT, 0);
+  knot.castShadow = true;
+  scene.add(knot);
+
+  // [2] GROUND + LIGHT -------------------------------------------------------
+  const groundGeometry = new THREE.PlaneGeometry(160, 160);
+  const groundMaterial = new THREE.MeshStandardMaterial({
+    color: 0x3a4055, roughness: 0.92, metalness: 0.0
+  });
+  const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  const hemisphereLight = new THREE.HemisphereLight(0xbfd4ff, 0x1a1c24, 0.7);
+  scene.add(hemisphereLight);
+
+  const sun = new THREE.DirectionalLight(0xffffff, 2.6);
+  sun.position.set(5, 10, 4);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.left = -6;
+  sun.shadow.camera.right = 6;
+  sun.shadow.camera.top = 6;
+  sun.shadow.camera.bottom = -6;
+  sun.shadow.camera.near = 1;
+  sun.shadow.camera.far = 30;
+  sun.shadow.bias = -0.0005;
+  scene.add(sun);
+  scene.add(sun.target);
+
+  // [3] PARTICLES ------------------------------------------------------------
+  // One Points object, one BufferGeometry, one "position" attribute.
+  // Shell radius 2.9..3.1 around the knot keeps every point above the ground.
+  const particlePositions = new Float32Array(PARTICLE_COUNT * 3);
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    const u = Math.random() * 2 - 1;
+    const theta = Math.random() * Math.PI * 2;
+    const s = Math.sqrt(1 - u * u);
+    const radius = 2.9 + Math.random() * 0.2;
+    particlePositions[i * 3] = radius * s * Math.cos(theta);
+    particlePositions[i * 3 + 1] = radius * u;
+    particlePositions[i * 3 + 2] = radius * s * Math.sin(theta);
+  }
+  const particleGeometry = new THREE.BufferGeometry();
+  particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+  const particleMaterial = new THREE.PointsMaterial({
+    color: 0x9fd0ff,
+    size: 0.05,
+    sizeAttenuation: true,
+    transparent: true,
+    opacity: 0.85,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  });
+  const particles = new THREE.Points(particleGeometry, particleMaterial);
+  particles.position.copy(knot.position);
+  particles.rotation.z = 0.35;
+  scene.add(particles);
+
+  // [4] CONTROLS -------------------------------------------------------------
+  // Target sits at the knot (above the ground), pan is off so the target stays
+  // there, and the polar clamp keeps the camera at or above target height.
+  const controls = new OrbitControls(camera, canvas);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.enablePan = false;
+  controls.minDistance = 3;
+  controls.maxDistance = 20;
+  controls.maxPolarAngle = Math.PI / 2 - 0.05;
+  controls.target.copy(knot.position);
+  controls.update();
+
+  // [5] PICKING --------------------------------------------------------------
+  // Pointer coords come from the canvas' live bounding rect at click time, so
+  // they stay correct after any resize. A drag (orbit) is not a click.
+  const raycaster = new THREE.Raycaster();
+  const pointerNdc = new THREE.Vector2();
+  const pickTargets = [knot, ground];
+  const CLICK_SLOP_PX = 6;
+  let downPointerId = -1;
+  let downX = 0;
+  let downY = 0;
+
+  function onPointerDown(event) {
+    if (!event.isPrimary || event.button !== 0) return;
+    downPointerId = event.pointerId;
+    downX = event.clientX;
+    downY = event.clientY;
+  }
+
+  function onPointerUp(event) {
+    if (event.pointerId !== downPointerId) return;
+    downPointerId = -1;
+    if (Math.hypot(event.clientX - downX, event.clientY - downY) > CLICK_SLOP_PX) return;
+
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    pointerNdc.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    pointerNdc.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    camera.updateMatrixWorld();
+    raycaster.setFromCamera(pointerNdc, camera);
+    const hits = raycaster.intersectObjects(pickTargets, false);
+    // Only the knot toggles; a ground hit (or a miss) does nothing.
+    if (hits.length > 0 && hits[0].object === knot) {
+      knotUniforms.uWireframe.value = knotUniforms.uWireframe.value > 0.5 ? 0 : 1;
+    }
+  }
+
+  canvas.addEventListener('pointerdown', onPointerDown);
+  canvas.addEventListener('pointerup', onPointerUp);
+
+  // [6] RESIZE ---------------------------------------------------------------
+  function onResize() {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    if (width === 0 || height === 0) return;
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(width, height);
+  }
+  window.addEventListener('resize', onResize);
+
+  // LOOP ---------------------------------------------------------------------
+  // All motion is scaled by the clock delta (seconds), so speed is independent
+  // of frame rate. Delta is clamped so a backgrounded tab doesn't jump.
+  const clock = new THREE.Clock();
+  let rafId = 0;
+  let disposed = false;
+
+  // [7] FPS ------------------------------------------------------------------
+  let fpsFrames = 0;
+  let fpsElapsed = 0;
+
+  function frame() {
+    if (disposed) return;
+    rafId = requestAnimationFrame(frame);
+
+    const rawDelta = clock.getDelta();
+    const delta = Math.min(rawDelta, 0.1);
+
+    knotUniforms.uTime.value += delta;
+    knot.rotation.y += delta * 0.3;
+    knot.rotation.x += delta * 0.12;
+    particles.rotation.y += delta * 0.08;
+
+    controls.update();
+    renderer.render(scene, camera);
+
+    fpsFrames++;
+    fpsElapsed += rawDelta;
+    if (fpsElapsed >= 1) {
+      fpsElement.textContent = 'FPS: ' + Math.round(fpsFrames / fpsElapsed);
+      fpsFrames = 0;
+      fpsElapsed = 0;
+    }
+  }
+  rafId = requestAnimationFrame(frame);
+
+  // CLEANUP ------------------------------------------------------------------
+  return function cleanup() {
+    if (disposed) return;
+    disposed = true;
+
+    cancelAnimationFrame(rafId);
+    window.removeEventListener('resize', onResize);
+    canvas.removeEventListener('pointerdown', onPointerDown);
+    canvas.removeEventListener('pointerup', onPointerUp);
+    controls.dispose();
+
+    scene.remove(knot, ground, particles, sun, sun.target, hemisphereLight);
+
+    knotGeometry.dispose();
+    knotMaterial.dispose();
+    groundGeometry.dispose();
+    groundMaterial.dispose();
+    particleGeometry.dispose();
+    particleMaterial.dispose();
+    sun.dispose(); // also frees the 2048x2048 shadow map
+    hemisphereLight.dispose();
+
+    renderer.renderLists.dispose();
+    renderer.dispose();
+    canvas.remove();
+  };
+}
+
+// Cleanup runs on pagehide; if the page comes back from the bfcache, rebuild.
+let cleanup = init();
+
+window.addEventListener('pagehide', () => {
+  if (cleanup) {
+    cleanup();
+    cleanup = null;
+  }
+});
+
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted && !cleanup) {
+    cleanup = init();
+  }
+});
+</script>
+</body>
+</html>
