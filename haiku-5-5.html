@@ -7,6 +7,8 @@
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#0a141c;}
   canvas{display:block;width:100vw;height:100vh;touch-action:none;}
+  #bar{position:fixed;top:0;left:0;right:0;height:22px;z-index:7;background:#000000;color:#d8d8d8;display:flex;align-items:center;justify-content:center;gap:18px;font:600 11px/22px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.04em;white-space:nowrap;overflow:hidden;}
+  #bar b{color:#ffffff;font-weight:600;}
   #veil{position:fixed;inset:0;background:#0a141c;opacity:1;transition:opacity 2.2s ease;pointer-events:none;z-index:5;}
   #dock{position:fixed;left:50%;bottom:clamp(12px,3vh,26px);transform:translateX(-50%);z-index:6;display:flex;align-items:center;gap:4px;padding:7px 10px;border-radius:999px;background:rgba(12,24,32,.42);border:1px solid rgba(255,214,140,.22);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 10px 30px rgba(0,0,0,.28);max-width:calc(100vw - 16px);}
   #dock button{appearance:none;border:0;background:transparent;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;cursor:pointer;color:#f5ddaa;transition:background .2s,color .2s,transform .2s;padding:0;flex:none;}
@@ -29,6 +31,7 @@
 </script>
 </head>
 <body>
+<div id="bar"><span>Model: <b>claude-sonnet-5-5</b></span><span>Time: <b>13m</b></span><span>Cost: <b>$$$</b></span></div>
 <div id="veil"></div>
 <nav id="dock" aria-label="Scene controls">
   <button type="button" data-view="exterior" class="on" aria-label="Exterior view"><svg viewBox="0 0 24 24"><path d="M2.5 15h19l-3.2 4.5H5.7z"/><path d="M12 3v12"/><path d="M12 4c3.4 1.7 5.5 4.8 5.5 8H12"/><path d="M12 7.5c-2.1 1.2-3.5 3.5-3.5 6.5H12"/></svg></button>
