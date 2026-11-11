@@ -34,6 +34,7 @@ a{color:inherit}
 .topbar .logo{width:14px;height:auto;display:block}
 .topbar a{margin-left:auto;color:#f4f1ea;text-decoration:none;white-space:nowrap}
 .topbar a:hover{text-decoration:underline}
+.topbar a.brand{margin-left:0}
 .wrap{max-width:1180px;margin:0 auto;padding:0 16px}
 header.hero{padding:72px 0 40px;display:grid;grid-template-columns:1.3fr 1fr;gap:48px;align-items:end}
 .eyebrow{font:600 11px/1 "JetBrains Mono",monospace;letter-spacing:.2em;text-transform:uppercase;color:var(--accent);display:flex;align-items:center;gap:10px}
@@ -147,7 +148,7 @@ footer{padding:40px 0 60px;color:var(--muted);font-size:13px;display:flex;flex-w
 </head>
 <body>
 <div class="topbar">
-  <span class="brand"><svg class="logo" aria-hidden="true" viewBox="0 0 96 100" fill="none"><defs><linearGradient id="forge-blue" x1="15" y1="12" x2="80" y2="85" gradientUnits="userSpaceOnUse"><stop stop-color="#55c5ff"/><stop offset="1" stop-color="#2e50ed"/></linearGradient></defs><rect x="39" y="24" width="19" height="19" rx="4" fill="#b6eaff"/><rect x="59" y="5" width="12" height="12" rx="3" fill="#2e50ed"/><rect x="70" y="29" width="10" height="10" rx="2.5" fill="#43b7ff"/><rect x="25" y="39" width="11" height="11" rx="2.5" fill="#82d8ff"/><rect x="60" y="44" width="12" height="12" rx="3" fill="#419aff"/><rect x="31" y="17" width="6" height="6" rx="1.7" fill="#b6eaff"/><path d="M9 61h78c-4 8-11 12-21 16-5 2-7 5-7 9 0 3 2 6 7 9H31c5-4 7-7 7-11 0-5-4-8-12-10-7-2-13-6-17-13Z" fill="url(#forge-blue)"/><path d="M9 61h78l-33 8c-7 2-11 6-13 12-2-4-7-6-15-7-7-2-13-6-17-13Z" fill="#d4eeff" opacity=".72"/></svg><b>Eval Forge</b></span>
+  <a class="brand" href="https://eval-forge.github.io" aria-label="Eval Forge home"><svg class="logo" aria-hidden="true" viewBox="0 0 96 100" fill="none"><defs><linearGradient id="forge-blue" x1="15" y1="12" x2="80" y2="85" gradientUnits="userSpaceOnUse"><stop stop-color="#55c5ff"/><stop offset="1" stop-color="#2e50ed"/></linearGradient></defs><rect x="39" y="24" width="19" height="19" rx="4" fill="#b6eaff"/><rect x="59" y="5" width="12" height="12" rx="3" fill="#2e50ed"/><rect x="70" y="29" width="10" height="10" rx="2.5" fill="#43b7ff"/><rect x="25" y="39" width="11" height="11" rx="2.5" fill="#82d8ff"/><rect x="60" y="44" width="12" height="12" rx="3" fill="#419aff"/><rect x="31" y="17" width="6" height="6" rx="1.7" fill="#b6eaff"/><path d="M9 61h78c-4 8-11 12-21 16-5 2-7 5-7 9 0 3 2 6 7 9H31c5-4 7-7 7-11 0-5-4-8-12-10-7-2-13-6-17-13Z" fill="url(#forge-blue)"/><path d="M9 61h78l-33 8c-7 2-11 6-13 12-2-4-7-6-15-7-7-2-13-6-17-13Z" fill="#d4eeff" opacity=".72"/></svg><b>Eval Forge</b></a>
   <span class="hide-sm">Three.js fantasy ship battle</span>
   <span class="hide-sm" id="count-bar"></span>
   <a href="https://eval-forge.github.io" target="_blank" rel="noopener noreferrer">Back to Eval Forge homepage ↗</a>
