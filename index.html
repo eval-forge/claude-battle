@@ -9,6 +9,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/katex.min.css" crossorigin="anonymous">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/katex.min.js" crossorigin="anonymous" onload="renderMath()"></script>
 <style>
 :root{
   --bg:#f6efe4;--surface:#fffaf2;--ink:#2a2620;--muted:#776e62;--line:rgba(60,45,30,.14);
@@ -135,8 +137,12 @@ footer{padding:40px 0 60px;color:var(--muted);font-size:13px;display:flex;flex-w
 .equation var{font-style:italic;color:var(--accent);font-weight:600}
 .equation .frac{display:inline-flex;flex-direction:column;align-items:center;gap:4px;font-size:.88em}
 .equation .frac span:first-child{border-bottom:1px solid currentColor;padding:0 6px 4px}
+.equation .katex{font-size:1.08em;color:var(--ink)}
+.equation .tline .katex{color:var(--muted);font-size:1.15em}
+.equation .katex .v{color:var(--accent)}
+.equation.tex .tline{display:block;margin-top:18px}
 .scatter-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
-@media (max-width:820px){.method{grid-template-columns:minmax(0,1fr)}.table-wrap{overflow-x:auto}.grid{grid-template-columns:minmax(0,1fr)}.scatter-grid{grid-template-columns:1fr}.meta{grid-template-columns:repeat(3,1fr)}}
+@media (max-width:820px){.equation{padding:22px 8px}.equation.tex .main{font-size:3.9vw}.method{grid-template-columns:minmax(0,1fr)}.table-wrap{overflow-x:auto}.grid{grid-template-columns:minmax(0,1fr)}.scatter-grid{grid-template-columns:1fr}.meta{grid-template-columns:repeat(3,1fr)}}
 </style>
 </head>
 <body>
@@ -163,8 +169,8 @@ footer{padding:40px 0 60px;color:var(--muted);font-size:13px;display:flex;flex-w
     <div class="method">
       <div class="eq-card">
         <div class="equation" role="img" aria-label="Final = 0.70 S + 0.295 P + 0.005 T, with T = 100 times (t max minus t) over (t max minus t min)">
-          <div class="main">Final = 0.70&thinsp;<var>S</var> + 0.295&thinsp;<var>P</var> + 0.005&thinsp;<var>T</var></div>
-          <div class="tline"><var>T</var> = 100 &times; <span class="frac"><span>t<sub>max</sub> &minus; t</span><span>t<sub>max</sub> &minus; t<sub>min</sub></span></span></div>
+          <div class="main" data-tex="\text{Final} = 0.70\,\htmlClass{v}{\boldsymbol{S}} + 0.295\,\htmlClass{v}{\boldsymbol{P}} + 0.005\,\htmlClass{v}{\boldsymbol{T}}">Final = 0.70&thinsp;<var>S</var> + 0.295&thinsp;<var>P</var> + 0.005&thinsp;<var>T</var></div>
+          <div class="tline" data-tex="\htmlClass{v}{\boldsymbol{T}} = 100 \times \dfrac{t_{\max} - t}{t_{\max} - t_{\min}}"><var>T</var> = 100 &times; <span class="frac"><span>t<sub>max</sub> &minus; t</span><span>t<sub>max</sub> &minus; t<sub>min</sub></span></span></div>
         </div>
         <dl>
           <dt>S</dt><dd>Score, 0 to 100. Overall quality of the scene: ship silhouette and carving detail, sails, clouds, water, lighting, the deck and cabin, and whether it all feels finished.</dd>
@@ -407,6 +413,17 @@ PLOTS.forEach(cfg => {
   });
   document.getElementById(cfg.id).innerHTML = g;
 });
+
+// Typeset the equation with KaTeX once it loads; the plain HTML version stays as the fallback.
+function renderMath(){
+  if (!window.katex) return;
+  const box = document.querySelector(".equation");
+  try {
+    box.querySelectorAll("[data-tex]").forEach(el => katex.render(el.dataset.tex, el, {displayMode:true, trust:true, strict:false}));
+    box.classList.add("tex");
+  } catch (e) {}
+}
+renderMath();
 
 const root = document.documentElement;
 try { const t = localStorage.getItem("theme"); if (t) root.dataset.theme = t; } catch (e) {}
